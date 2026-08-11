@@ -1,0 +1,136 @@
+/* ============================================================
+   Footer.css
+   ============================================================ */
+
+.footer {
+  background: var(--bg-deepest);
+  border-top: 1px solid var(--border-dim);
+  margin-top: auto;
+}
+
+/* ── Ticker Strip ── */
+.footer-ticker-strip {
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-dim);
+  overflow: hidden;
+  padding: 10px 0;
+}
+
+.ticker-track {
+  display: flex;
+  gap: 0;
+  animation: ticker-scroll 30s linear infinite;
+  width: max-content;
+}
+
+.ticker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 28px;
+  border-right: 1px solid var(--border-dim);
+  white-space: nowrap;
+}
+
+.ticker-sym {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.ticker-price {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.ticker-chg {
+  font-size: 11px;
+  font-weight: 700;
+}
+.ticker-chg.up   { color: var(--success); }
+.ticker-chg.down { color: var(--danger); }
+
+/* ── Main Footer Body ── */
+.footer-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 48px 24px 36px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  gap: 40px;
+}
+
+.footer-brand {
+  max-width: 280px;
+}
+
+.footer-logo {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer-tagline {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.footer-links {
+  display: flex;
+  gap: 60px;
+}
+
+.footer-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.footer-col h5 {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.footer-col a {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footer-col a:hover { color: var(--text-primary); }
+
+/* ── Bottom Bar ── */
+.footer-bottom {
+  border-top: 1px solid var(--border-dim);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.footer-disclaimer { color: var(--warning); }
+
+@media (max-width: 600px) {
+  .footer-main { flex-direction: column; }
+  .footer-links { gap: 32px; }
+}
