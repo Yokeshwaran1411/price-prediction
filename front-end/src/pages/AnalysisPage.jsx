@@ -6,33 +6,137 @@ import './AnalysisPage.css';
 const API = 'http://localhost:3000/api';
 
 /* ── Lightweight markdown renderer ── */
+function isTableRow(line) {
+  return line.trim().startsWith('|') && line.trim().endsWith('|');
+}
+
+function isSeparatorRow(line) {
+  return /^\|[\s\-:|]+\|/.test(line.trim());
+}
+
+function parseTableRow(line) {
+  return line.trim().slice(1, -1).split('|').map(cell => cell.trim());
+}
+
 function renderMd(text) {
   if (!text) return null;
-  return text.split('\n').map((line, i) => {
-    if (line.startsWith('### ')) return <h3 key={i}>{inlineMd(line.slice(4))}</h3>;
-    if (line.startsWith('## '))  return <h2 key={i}>{inlineMd(line.slice(3))}</h2>;
-    if (line.startsWith('# '))   return <h1 key={i}>{inlineMd(line.slice(2))}</h1>;
+
+  // Pre-group lines into blocks so tables can span multiple lines
+  const lines = text.split('\n');
+  const blocks = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    if (isTableRow(lines[i])) {
+      const tableLines = [];
+      while (i < lines.length && isTableRow(lines[i])) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      blocks.push({ type: 'table', lines: tableLines });
+    } else {
+      blocks.push({ type: 'line', value: lines[i] });
+      i++;
+    }
+  }
+
+  return blocks.map((block, bi) => {
+    if (block.type === 'table') {
+      const rows = block.lines.filter(l => !isSeparatorRow(l));
+      const [headerRow, ...bodyRows] = rows;
+      const headers = parseTableRow(headerRow);
+      return (
+        <div key={bi} className="md-table-wrap">
+          <table className="md-table">
+            <thead>
+              <tr>
+                {headers.map((h, hi) => (
+                  <th key={hi}>{inlineMd(h)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {bodyRows.map((row, ri) => (
+                <tr key={ri}>
+                  {parseTableRow(row).map((cell, ci) => (
+                    <td key={ci}>{inlineMd(cell)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    // Regular line rendering
+    const line = block.value;
+    const trimmed = line.trim();
+    if (trimmed === '---' || trimmed === '***')
+      return <hr key={bi} className="md-hr" />;
+
+    const headerMatch = line.match(/^(#{1,6})\s+(.*)/);
+    if (headerMatch) {
+      const level = headerMatch[1].length;
+      const Tag = `h${level}`;
+      return <Tag key={bi}>{inlineMd(headerMatch[2])}</Tag>;
+    }
+
     if (line.startsWith('- ') || line.startsWith('* '))
-      return <ul key={i}><li>{inlineMd(line.slice(2))}</li></ul>;
+      return <ul key={bi}><li>{inlineMd(line.slice(2))}</li></ul>;
+
     const num = line.match(/^(\d+)\.\s(.*)/);
-    if (num) return <ol key={i} start={+num[1]}><li>{inlineMd(num[2])}</li></ol>;
-    if (!line.trim()) return <div key={i} className="md-gap" />;
-    return <p key={i}>{inlineMd(line)}</p>;
+    if (num) return <ol key={bi} start={+num[1]}><li>{inlineMd(num[2])}</li></ol>;
+    if (!trimmed) return <div key={bi} className="md-gap" />;
+    return <p key={bi}>{inlineMd(line)}</p>;
   });
 }
 
 function inlineMd(text) {
-  const parts = [];
-  let i = 0;
-  const re = /\*\*(.*?)\*\*/g;
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > i) parts.push(text.slice(i, m.index));
-    parts.push(<strong key={m.index}>{m[1]}</strong>);
-    i = re.lastIndex;
-  }
-  if (i < text.length) parts.push(text.slice(i));
-  return parts.length ? parts : text;
+  if (!text) return '';
+  let parts = [text];
+  
+  // Parse bold **
+  parts = parts.flatMap(part => {
+    if (typeof part !== 'string') return part;
+    const subParts = [];
+    const re = /\*\*(.*?)\*\*/g;
+    let match;
+    let lastIndex = 0;
+    while ((match = re.exec(part)) !== null) {
+      if (match.index > lastIndex) {
+        subParts.push(part.slice(lastIndex, match.index));
+      }
+      subParts.push(<strong key={`b-${match.index}`}>{match[1]}</strong>);
+      lastIndex = re.lastIndex;
+    }
+    if (lastIndex < part.length) {
+      subParts.push(part.slice(lastIndex));
+    }
+    return subParts;
+  });
+
+  // Parse italic *
+  parts = parts.flatMap((part, idx) => {
+    if (typeof part !== 'string') return part;
+    const subParts = [];
+    const re = /\*(.*?)\*/g;
+    let match;
+    let lastIndex = 0;
+    while ((match = re.exec(part)) !== null) {
+      if (match.index > lastIndex) {
+        subParts.push(part.slice(lastIndex, match.index));
+      }
+      subParts.push(<em key={`i-${idx}-${match.index}`}>{match[1]}</em>);
+      lastIndex = re.lastIndex;
+    }
+    if (lastIndex < part.length) {
+      subParts.push(part.slice(lastIndex));
+    }
+    return subParts;
+  });
+
+  return parts;
 }
 
 /* ── Deterministic helpers ── */
@@ -40,167 +144,6 @@ function seedNum(sym, mult, mod, offset = 0) {
   let n = 0;
   for (let i = 0; i < sym.length; i++) n += sym.charCodeAt(i);
   return ((n * mult) % mod) + offset;
-}
-
-function buildChartData(sym, basePrice, daysCount) {
-  const pts = [];
-  let p = basePrice;
-  for (let d = daysCount; d >= 0; d--) {
-    const s = sym + d;
-    let h = 0;
-    for (let i = 0; i < s.length; i++) h += s.charCodeAt(i);
-    const delta = (((h * 73) % 200) / 100 - 1) * 0.015 * p;
-    p += delta;
-    pts.push({ day: d, price: parseFloat(p.toFixed(2)) });
-  }
-  return pts.reverse();
-}
-
-/* ── Interactive SVG chart with mouse tracking & tooltip ── */
-function SparkChart({ data, color = '#7c3aed' }) {
-  const svgRef = useRef(null);
-  const [hoveredIdx, setHoveredIdx] = useState(null);
-  const [hoverPos, setHoverPos] = useState({ x: 0, y: 0 });
-
-  const W = 580, H = 160, PAD = { t: 15, r: 15, b: 30, l: 15 };
-  const prices = data.map(d => d.price);
-  const minP = Math.min(...prices), maxP = Math.max(...prices);
-  const rangeP = maxP - minP || 1;
-
-  const toX = (i) => PAD.l + (i / (data.length - 1)) * (W - PAD.l - PAD.r);
-  const toY = (p) => PAD.t + (1 - (p - minP) / rangeP) * (H - PAD.t - PAD.b);
-
-  const linePath = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${toX(i)} ${toY(d.price)}`).join(' ');
-  const areaPath = linePath + ` L ${toX(data.length - 1)} ${H - PAD.b} L ${toX(0)} ${H - PAD.b} Z`;
-
-  const lastX = toX(data.length - 1), lastY = toY(prices[prices.length - 1]);
-
-  const handleMouseMove = (e) => {
-    if (!svgRef.current) return;
-    const rect = svgRef.current.getBoundingClientRect();
-    const mouseX = ((e.clientX - rect.left) / rect.width) * W;
-    
-    // Find closest index
-    let closestIdx = 0;
-    let minDiff = Infinity;
-    for (let i = 0; i < data.length; i++) {
-      const diff = Math.abs(toX(i) - mouseX);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closestIdx = i;
-      }
-    }
-    
-    setHoveredIdx(closestIdx);
-    setHoverPos({
-      x: toX(closestIdx),
-      y: toY(data[closestIdx].price)
-    });
-  };
-
-  const handleMouseLeave = () => {
-    setHoveredIdx(null);
-  };
-
-  return (
-    <div className="chart-svg-container" style={{ position: 'relative' }}>
-      <svg 
-        ref={svgRef}
-        viewBox={`0 0 ${W} ${H}`} 
-        className="chart-svg"
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        style={{ cursor: 'crosshair', overflow: 'visible' }}
-      >
-        <defs>
-          <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.22" />
-            <stop offset="100%" stopColor={color} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-
-        {/* Grid lines */}
-        {[0.15, 0.5, 0.85].map(r => (
-          <line key={r}
-            x1={PAD.l} y1={PAD.t + r * (H - PAD.t - PAD.b)}
-            x2={W - PAD.r} y2={PAD.t + r * (H - PAD.t - PAD.b)}
-            stroke="rgba(255,255,255,0.05)" strokeWidth={1}
-          />
-        ))}
-
-        {/* Area fill */}
-        <path d={areaPath} fill="url(#cg)" />
-
-        {/* Line */}
-        <path d={linePath} fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-
-        {/* Hover vertical line */}
-        {hoveredIdx !== null && (
-          <line
-            x1={hoverPos.x}
-            y1={PAD.t}
-            x2={hoverPos.x}
-            y2={H - PAD.b}
-            stroke="rgba(255, 255, 255, 0.15)"
-            strokeDasharray="4 4"
-            strokeWidth={1}
-          />
-        )}
-
-        {/* Hover dot */}
-        {hoveredIdx !== null && (
-          <g>
-            <circle cx={hoverPos.x} cy={hoverPos.y} r={6} fill={color} />
-            <circle cx={hoverPos.x} cy={hoverPos.y} r={10} fill={color} opacity={0.3} />
-          </g>
-        )}
-
-        {/* Current price dot (only if not hovering or if hovering on last index) */}
-        {(hoveredIdx === null || hoveredIdx === data.length - 1) && (
-          <g>
-            <circle cx={lastX} cy={lastY} r={5} fill={color} />
-            <circle cx={lastX} cy={lastY} r={9} fill={color} opacity={0.25} />
-          </g>
-        )}
-
-        {/* X-Axis labels (start and end labels) */}
-        <text x={PAD.l} y={H - 10} fill="var(--text-muted)" fontSize={10} textAnchor="start">
-          {data.length} days ago
-        </text>
-        <text x={W - PAD.r} y={H - 10} fill="var(--text-muted)" fontSize={10} textAnchor="end">
-          Today
-        </text>
-      </svg>
-
-      {/* Tooltip Box */}
-      {hoveredIdx !== null && (
-        <div 
-          className="chart-tooltip"
-          style={{
-            position: 'absolute',
-            left: `${(hoverPos.x / W) * 100}%`,
-            top: `${(hoverPos.y / H) * 100 - 32}%`,
-            transform: 'translate(-50%, -100%)',
-            background: 'var(--bg-elevated)',
-            border: '1px solid var(--border-mid)',
-            borderRadius: '6px',
-            padding: '6px 10px',
-            pointerEvents: 'none',
-            zIndex: 10,
-            whiteSpace: 'nowrap',
-            boxShadow: 'var(--shadow-card)',
-            fontSize: '11px',
-            color: 'var(--text-primary)'
-          }}
-        >
-          <span style={{ fontWeight: 'bold' }}>₹{data[hoveredIdx].price.toFixed(2)}</span>
-          <span style={{ color: 'var(--text-muted)', marginLeft: '6px' }}>
-            {data[hoveredIdx].day === 0 ? 'Today' : `${data[hoveredIdx].day}d ago`}
-          </span>
-        </div>
-      )}
-    </div>
-  );
 }
 
 export default function AnalysisPage() {
@@ -221,31 +164,6 @@ export default function AnalysisPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [result,    setResult]    = useState(null);
   const [error,     setError]     = useState(null);
-  const [rangeTab,  setRangeTab]  = useState('2W');
-
-  // Convert tab range into day count
-  const daysCount = useMemo(() => {
-    if (rangeTab === '1W') return 7;
-    if (rangeTab === '2W') return 14;
-    return 30; // '1M'
-  }, [rangeTab]);
-
-  // Generate historical data
-  const baseHistory = useMemo(() => {
-    return buildChartData(symbol, initialBasePrice, daysCount);
-  }, [symbol, initialBasePrice, daysCount]);
-
-  // Append live price update to the final element of chartData
-  const chartData = useMemo(() => {
-    const nextData = [...baseHistory];
-    if (nextData.length > 0) {
-      nextData[nextData.length - 1] = {
-        ...nextData[nextData.length - 1],
-        price: livePrice
-      };
-    }
-    return nextData;
-  }, [baseHistory, livePrice]);
 
   const chgStr    = (liveChg >= 0 ? '+' : '') + liveChg.toFixed(2) + '%';
   const isUp      = liveChg >= 0;
@@ -313,11 +231,30 @@ export default function AnalysisPage() {
 
         {/* Stock hero */}
         <div className="stock-hero anim-fade-up">
-          <div className="stock-hero-left" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div className="stock-hero-left">
             <div>
               <div className="stock-exch-badge">{stock.exchange || 'NSE / BSE'}</div>
               <div className="stock-hero-sym">{symbol}</div>
               <div className="stock-hero-name">{stock.name}</div>
+            </div>
+
+            {/* Key Metrics Row */}
+            <div className="hero-metrics-grid">
+              {[
+                { label: "Today's High",    value: `₹${high}` },
+                { label: "Today's Low",     value: `₹${low}` },
+                { label: '52W High',        value: `₹${wkHigh}` },
+                { label: '52W Low',         value: `₹${wkLow}` },
+                { label: 'Volume',          value: `${(volume / 100000).toFixed(1)}L` },
+                { label: 'P/E Ratio',       value: pe.toFixed(1) },
+                { label: 'Market Cap',      value: `₹${(livePrice * seedNum(symbol,17,100,10) * 1e4 / 1e9).toFixed(0)}B` },
+                { label: 'Avg Volume',      value: `${((volume * 0.9) / 100000).toFixed(1)}L` },
+              ].map(m => (
+                <div key={m.label} className="hero-metric-item">
+                  <span className="hero-metric-label">{m.label}</span>
+                  <span className="hero-metric-value">{m.value}</span>
+                </div>
+              ))}
             </div>
           </div>
           <div className="stock-hero-right">
@@ -336,143 +273,85 @@ export default function AnalysisPage() {
           </div>
         </div>
 
-        {/* Two-column layout */}
-        <div className="analysis-layout">
+        {/* Full-width analysis layout */}
+        <div className="analysis-layout-full">
 
-          {/* ── LEFT COLUMN ── */}
-          <div className="left-col">
+          {/* AI Panel */}
+          <div className="analysis-panel anim-fade-up">
+            <div className="analysis-panel-header">
+              <h3>
+                <Bot size={18} strokeWidth={2} />
+                StockGPT Analysis Report
+              </h3>
+              <span className="badge badge-violet">AI</span>
+            </div>
 
-            {/* Chart */}
-            <div className="chart-panel anim-fade-up">
-              <div className="chart-panel-header">
-                <span className="chart-panel-title">Price Trend</span>
-                <div className="chart-range-tabs">
-                  {['1W', '2W', '1M'].map(r => (
-                    <button
-                      key={r}
-                      className={`chart-tab ${rangeTab === r ? 'active' : ''}`}
-                      onClick={() => setRangeTab(r)}
-                    >{r}</button>
-                  ))}
+            <div className="analysis-panel-body">
+              {/* Analyzing */}
+              {analyzing && (
+                <div className="ai-loading">
+                  <div className="ai-loading-orb" />
+                  <h4>Consulting AI Engine…</h4>
+                  <p>Analyzing market sentiment, technical indicators, and predictive signals for {symbol}.</p>
                 </div>
-              </div>
-              <div className="chart-svg-wrap">
-                <SparkChart
-                  data={chartData}
-                  color={isUp ? '#10b981' : '#f43f5e'}
-                />
-              </div>
-            </div>
+              )}
 
-            {/* Key Metrics */}
-            <div className="metrics-panel anim-fade-up">
-              <div className="metrics-panel-title">Key Metrics</div>
-              <div className="metrics-grid">
-                {[
-                  { label: "Today's High",    value: `₹${high}` },
-                  { label: "Today's Low",     value: `₹${low}` },
-                  { label: '52W High',        value: `₹${wkHigh}` },
-                  { label: '52W Low',         value: `₹${wkLow}` },
-                  { label: 'Volume',          value: `${(volume / 100000).toFixed(1)}L` },
-                  { label: 'P/E Ratio',       value: pe.toFixed(1) },
-                  { label: 'Market Cap',      value: `₹${(livePrice * seedNum(symbol,17,100,10) * 1e4 / 1e9).toFixed(0)}B` },
-                  { label: 'Avg Volume',      value: `${((volume * 0.9) / 100000).toFixed(1)}L` },
-                ].map(m => (
-                  <div key={m.label} className="metric-item">
-                    <span className="metric-label">{m.label}</span>
-                    <span className="metric-value">{m.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* ── RIGHT COLUMN ── */}
-          <div className="right-col">
-
-            {/* Trigger Card */}
-            {!result && !analyzing && (
-              <div className="trigger-card anim-fade-up">
-                <div className="trigger-card-icon">
-                  <Bot size={36} strokeWidth={1.5} />
+              {/* Error */}
+              {error && !analyzing && (
+                <div className="ai-error">
+                  <span className="ai-error-icon"><AlertTriangle size={20} strokeWidth={2} /></span>
+                  <p>{error}</p>
                 </div>
-                <h3>StockGPT AI Prediction</h3>
-                <p>
-                  Get an institutional-grade analysis report for <strong>{symbol}</strong> — including market sentiment, price direction forecast, technical indicators, and risk factors.
-                </p>
-                <button className="trigger-btn" onClick={runAnalysis}>
-                  <Sparkles size={16} strokeWidth={2} />
-                  Generate AI Prediction Report
-                </button>
-              </div>
-            )}
+              )}
 
-            {/* AI Report Panel */}
-            <div className="analysis-panel anim-fade-up">
-              <div className="analysis-panel-header">
-                <h3>
-                  <Bot size={18} strokeWidth={2} />
-                  StockGPT Analysis Report
-                </h3>
-                <span className="badge badge-violet">AI</span>
-              </div>
+              {/* Placeholder */}
+              {!analyzing && !result && !error && (
+                <div className="ai-placeholder">
+                  <div className="ai-placeholder-icon"><Radio size={48} strokeWidth={1.2} /></div>
+                  <h4>AI Engine Ready</h4>
+                  <p>Click "Generate AI Prediction Report" to start your analysis.</p>
+                </div>
+              )}
 
-              <div className="analysis-panel-body">
-                {/* Analyzing */}
-                {analyzing && (
-                  <div className="ai-loading">
-                    <div className="ai-loading-orb" />
-                    <h4>Consulting AI Engine…</h4>
-                    <p>Analyzing market sentiment, technical indicators, and predictive signals for {symbol}.</p>
-                  </div>
-                )}
-
-                {/* Re-run button after result */}
-                {result && !analyzing && (
-                  <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
-                    <button className="btn btn-secondary btn-sm" onClick={runAnalysis}>
-                      <RefreshCw size={13} strokeWidth={2} />
-                      Re-run Analysis
-                    </button>
-                  </div>
-                )}
-
-                {/* Error */}
-                {error && !analyzing && (
-                  <div className="ai-error">
-                    <span className="ai-error-icon"><AlertTriangle size={20} strokeWidth={2} /></span>
-                    <p>{error}</p>
-                  </div>
-                )}
-
-                {/* Placeholder */}
-                {!analyzing && !result && !error && (
-                  <div className="ai-placeholder">
-                    <div className="ai-placeholder-icon"><Radio size={48} strokeWidth={1.2} /></div>
-                    <h4>AI Engine Ready</h4>
-                    <p>Click "Generate AI Prediction Report" to start your analysis.</p>
-                  </div>
-                )}
-
-                {/* Result */}
-                {result && !analyzing && (
-                  <div className="analysis-output">
-                    {renderMd(result)}
-                  </div>
-                )}
-              </div>
+              {/* Result */}
+              {result && !analyzing && (
+                <div className="analysis-output">
+                  {renderMd(result)}
+                </div>
+              )}
             </div>
 
-            {/* Re-trigger if result is shown */}
+            {/* Close & Re-Generate Buttons at the Bottom */}
             {result && !analyzing && (
-              <div className="trigger-card" style={{ textAlign: 'center', padding: '20px' }}>
-                <button className="trigger-btn" onClick={runAnalysis}>
-                  <Sparkles size={16} strokeWidth={2} />
-                  Re-Generate Report
+              <div className="analysis-panel-footer">
+                <button className="btn-close" onClick={() => setResult(null)}>
+                  Close
+                </button>
+                <button className="btn-regenerate" onClick={runAnalysis}>
+                  <RefreshCw size={14} />
+                  Re-Generate
                 </button>
               </div>
             )}
           </div>
+
+          {/* Trigger Card (Shown when not generated yet) */}
+          {!result && !analyzing && (
+            <div className="trigger-card anim-fade-up" style={{ marginTop: '20px' }}>
+              <div className="trigger-card-icon">
+                <Bot size={36} strokeWidth={1.5} />
+              </div>
+              <h3>StockGPT AI Prediction</h3>
+              <p>
+                Get an institutional-grade analysis report for <strong>{symbol}</strong> — including market sentiment, price direction forecast, technical indicators, and risk factors.
+              </p>
+              <button className="trigger-btn" onClick={runAnalysis}>
+                <Sparkles size={16} strokeWidth={2} />
+                Generate AI Prediction Report
+              </button>
+            </div>
+          )}
+
         </div>
       </div>
     </div>
