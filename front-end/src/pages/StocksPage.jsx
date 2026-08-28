@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, X, Flame, Globe, SearchX } from 'lucide-react';
 import './StocksPage.css';
 
-const API = 'http://localhost:3000/api';
+const API = import.meta.env.VITE_API_URL ;
 
 const TRENDING = [
   { sym: 'RELIANCE', chg: '+1.85%', up: true },

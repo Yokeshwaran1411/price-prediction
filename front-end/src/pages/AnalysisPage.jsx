@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Bot, Sparkles, RefreshCw, Radio, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
 import './AnalysisPage.css';
 
-const API = 'http://localhost:3000/api';
+const API = import.meta.env.VITE_API_URL ;
 
 /* ── Lightweight markdown renderer ── */
 function isTableRow(line) {
