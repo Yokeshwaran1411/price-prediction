@@ -22,6 +22,11 @@ app.use((req, res, next) => {
     next();
 });
 
+// Health check (for UptimeRobot / uptime monitoring)
+app.get("/health", (req, res) => {
+    res.status(200).json({ status: "ok" });
+});
+
 // Register routes
 app.use("/api", stocksRouter);
 
