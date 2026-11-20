@@ -7,22 +7,34 @@ import StocksPage from './pages/StocksPage';
 import AnalysisPage from './pages/AnalysisPage';
 import HowItWorksPage from './pages/HowItWorksPage';
 
+function Health() {
+  return <pre style={{ margin: 0, padding: '1rem', fontFamily: 'monospace' }}>{JSON.stringify({ status: "ok" })}</pre>;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="app-layout">
-        <Header />
-        <main className="page-content">
-          <Routes>
-            <Route path="/"              element={<HomePage />} />
-            <Route path="/stocks"        element={<StocksPage />} />
-            <Route path="/stocks/:symbol" element={<AnalysisPage />} />
-            <Route path="/how-it-works"  element={<HowItWorksPage />} />
-            <Route path="*"              element={<HomePage />} />
-          </Routes>
-        </main>
-        <Footer />
-      </div>
+      <Routes>
+        <Route path="/health" element={<Health />} />
+        <Route
+          path="*"
+          element={
+            <div className="app-layout">
+              <Header />
+              <main className="page-content">
+                <Routes>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/stocks" element={<StocksPage />} />
+                  <Route path="/stocks/:symbol" element={<AnalysisPage />} />
+                  <Route path="/how-it-works" element={<HowItWorksPage />} />
+                  <Route path="*" element={<HomePage />} />
+                </Routes>
+              </main>
+              <Footer />
+            </div>
+          }
+        />
+      </Routes>
     </BrowserRouter>
   );
 }
