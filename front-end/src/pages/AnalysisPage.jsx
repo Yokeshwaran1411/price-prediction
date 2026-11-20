@@ -5,7 +5,6 @@ import './AnalysisPage.css';
 
 const API = import.meta.env.VITE_API_URL ;
 
-/* ── Lightweight markdown renderer ── */
 function isTableRow(line) {
   return line.trim().startsWith('|') && line.trim().endsWith('|');
 }
@@ -21,7 +20,6 @@ function parseTableRow(line) {
 function renderMd(text) {
   if (!text) return null;
 
-  // Pre-group lines into blocks so tables can span multiple lines
   const lines = text.split('\n');
   const blocks = [];
   let i = 0;

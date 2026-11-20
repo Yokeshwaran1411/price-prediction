@@ -45,10 +45,17 @@ export default function StocksPage() {
       const params = new URLSearchParams();
       if (q) params.set('search', q);
       params.set('limit', limit * pg);
-      const res  = await fetch(`${API}/stocks?${params}`);
+      const res = await fetch(`${API}/stocks?${params}`);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch stocks: ${res.status} ${res.statusText}`);
+      }
       let data = await res.json();
-      if (exch !== 'All') data = data.filter(s => s.exchange === exch);
-      setStocks(data);
+      if (Array.isArray(data)) {
+        if (exch !== 'All') data = data.filter(s => s.exchange === exch);
+        setStocks(data);
+      } else {
+        setStocks([]);
+      }
     } catch (e) {
       console.error(e);
     } finally {
